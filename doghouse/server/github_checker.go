@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"time"
+	"os"
+    "strconv"
 
 	"github.com/google/go-github/v53/github"
 	"github.com/vvakame/sdlog/aelog"
@@ -26,8 +28,32 @@ func (c *checkerGitHubClient) GetPullRequestDiff(ctx context.Context, owner, rep
 }
 
 func (c *checkerGitHubClient) CreateCheckRun(ctx context.Context, owner, repo string, opt github.CreateCheckRunOptions) (*github.CheckRun, error) {
+    existingCheck, err := c.findExistingCheckRun(ctx, owner, repo)
+    if (existingCheck != nil) {
+        return existingCheck, nil
+    }
+    aelog.Errorf(ctx, "Unable to find existing check, creating new check: %v", err)
 	checkRun, _, err := c.Checks.CreateCheckRun(ctx, owner, repo, opt)
 	return checkRun, err
+}
+
+func (c *checkerGitHubClient) findExistingCheckRun(ctx context.Context, owner, repo string) (*github.CheckRun, error) {
+    runId, err := strconv.ParseInt(os.Getenv("GITHUB_RUN_ID"), 10, 64)
+    if err != nil {
+        return nil, err
+    }
+    run, _, err := c.Actions.GetWorkflowRunByID(ctx, owner, repo, runId)
+    if err != nil {
+        return nil, err
+    }
+    checks, _, err := c.Checks.ListCheckRunsCheckSuite(ctx, owner, repo, *run.CheckSuiteID, &github.ListCheckRunsOptions{})
+    if err != nil {
+        return nil, err
+    }
+    if *checks.Total == 0 {
+        return nil, nil
+    }
+    return checks.CheckRuns[0], nil
 }
 
 func (c *checkerGitHubClient) UpdateCheckRun(ctx context.Context, owner, repo string, checkID int64, opt github.UpdateCheckRunOptions) (*github.CheckRun, error) {

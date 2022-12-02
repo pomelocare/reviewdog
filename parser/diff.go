@@ -27,6 +27,7 @@ type dstate struct {
 	startLine     int
 	isInsert      bool
 	newLines      []string
+	deletedLines  []string
 	originalLines []string // For Diagnostic.original_output
 }
 
@@ -44,6 +45,7 @@ func (d dstate) build(path string, currentLine int) *rdf.Diagnostic {
 	}
 	return &rdf.Diagnostic{
 		Location:       &rdf.Location{Path: path, Range: drange},
+		Message:        formatMessage(d.newLines, d.deletedLines),
 		Suggestions:    []*rdf.Suggestion{{Range: drange, Text: text}},
 		OriginalOutput: strings.Join(d.originalLines, "\n"),
 	}
@@ -84,6 +86,7 @@ func (p *DiffParser) Parse(r io.Reader) ([]*rdf.Diagnostic, error) {
 					}
 				case diff.LineDeleted:
 					lnum++
+					state.deletedLines = append(state.deletedLines, diffLine.Content)
 					state.originalLines = append(state.originalLines, buildOriginalLine(path, diffLine))
 					switch prevState {
 					case diff.LineUnchanged:
@@ -110,6 +113,21 @@ func (p *DiffParser) Parse(r io.Reader) ([]*rdf.Diagnostic, error) {
 		}
 	}
 	return diagnostics, nil
+}
+
+func formatMessage(newLines []string, deletedLines []string) string {
+    var sb strings.Builder
+    for _, str := range deletedLines {
+        sb.WriteString("-")
+        sb.WriteString(str)
+        sb.WriteString("\n")
+    }
+    for _, str := range newLines {
+        sb.WriteString("+")
+        sb.WriteString(str)
+        sb.WriteString("\n")
+    }
+    return sb.String()
 }
 
 func buildOriginalLine(path string, line *diff.Line) string {
