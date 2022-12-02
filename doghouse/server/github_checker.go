@@ -53,6 +53,17 @@ func (c *checkerGitHubClient) findExistingCheckRun(ctx context.Context, owner, r
     if *checks.Total == 0 {
         return nil, nil
     }
+    cName := os.Getenv("JOB_CHECK_NAME")
+    if len(cName) == 0 {
+        return checks.CheckRuns[0], nil
+    }
+    for _, check := range checks.CheckRuns {
+        aelog.Debugf(ctx, "Trying to match %s to check named %s", cName, *check.Name)
+        if *check.Name == cName {
+            return check, nil
+        }
+    }
+    aelog.Errorf(ctx, "Unable to find the check named %s. Make sure the JOB_CHECK_NAME env var is equal to the name of the job.", cName)
     return checks.CheckRuns[0], nil
 }
 
